@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CamaBier — Sistema Metrológico Híbrido</title>
+<style>
+:root{
+  --azul:#185FA5;--azul-esc:#0C447C;--azul-cl:#E6F1FB;
+  --verm:#E24B4A;--verm-cl:#FCEBEB;--verm-esc:#791F1F;
+  --verde:#3B6D11;--verde-cl:#EAF3DE;
+  --ambar:#BA7517;--ambar-cl:#FAEEDA;
+  --cinza:#F1EFE8;--cinza-bd:#D3D1C7;--muted:#888780;--texto:#2C2C2A;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+
+/* BODY — cresce livremente; scroll = browser; sem overflow:hidden */
+body{
+  font-family:'Segoe UI',Arial,sans-serif;
+  font-size:13px;color:var(--texto);background:#F8F7F4;
+  min-height:100vh;
+  overflow-x:hidden;   /* impede scroll horizontal na página toda */
+}
+
+/* HEADER — sticky, sempre 100% do viewport */
+.header{
+  position:sticky;top:0;z-index:100;width:100%;
+  background:var(--azul-esc);color:white;
+  padding:10px 24px;border-bottom:3px solid var(--verm);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.h-left h1{font-size:15px;font-weight:700;margin:0}
+.h-left p{font-size:10px;color:rgba(255,255,255,.6);margin-top:2px}
+.badge{background:var(--verm);color:white;font-size:9px;font-weight:700;
+  padding:2px 7px;border-radius:3px;letter-spacing:.06em;display:inline-block;margin-bottom:4px}
+.mode-bar{display:flex;align-items:center;gap:8px}
+.mode-pill{display:flex;border:1px solid rgba(255,255,255,.2);
+  border-radius:20px;overflow:hidden;font-size:11px}
+.mode-pill button{background:transparent;color:rgba(255,255,255,.6);
+  border:none;padding:4px 12px;cursor:pointer;transition:all .2s;
+  font-size:11px;font-weight:600}
+.mode-pill button.active{background:rgba(255,255,255,.15);color:white}
+#api-status{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700}
+#api-status.ok{background:#EAF3DE;color:var(--verde)}
+#api-status.off{background:rgba(255,255,255,.1);color:rgba(255,255,255,.5)}
+#api-status.err{background:var(--verm-cl);color:var(--verm)}
+
+/* GRID PRINCIPAL — coluna esquerda fixa 280px, direita ocupa o resto */
+.body{
+  display:grid;
+  grid-template-columns:280px 1fr;
+  align-items:start;
+  min-height:calc(100vh - 56px);
+  width:100%;
+}
+
+/* PAINEL ESQUERDO — sticky, sem scroll externo visível */
+.left{
+  position:sticky;top:56px;
+  height:calc(100vh - 56px);
+  overflow-y:auto;overflow-x:hidden;
+  background:white;border-right:1px solid var(--cinza-bd);
+  padding:14px;display:flex;flex-direction:column;gap:10px;
+}
+
+/* PAINEL DIREITO — cresce; scroll = browser */
+.right{
+  padding:16px 20px 40px;
+  display:flex;flex-direction:column;gap:14px;
+  overflow:visible;
+  min-width:0;  /* impede que o grid expanda além do espaço */
+}
+
+/* Componentes do menu (inalterados) */
+.sec{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--muted);margin-bottom:6px;
+  display:flex;justify-content:space-between;align-items:center}
+.sec span{background:var(--azul);color:white;font-size:9px;
+  padding:2px 7px;border-radius:10px}
+.caso-btn{width:100%;background:var(--cinza);border:1px solid var(--cinza-bd);
+  border-radius:6px;padding:8px 10px;cursor:pointer;text-align:left;
+  margin-bottom:5px;transition:all .15s}
+.caso-btn:hover,.caso-btn.active{background:var(--azul-cl);border-color:var(--azul)}
+.caso-btn strong{display:block;font-size:11px;color:var(--azul-esc);margin-bottom:2px}
+.caso-btn small{font-size:10px;color:var(--muted)}
+label{font-size:11px;font-weight:700;color:var(--azul-esc);
+  display:block;margin-bottom:3px}
+select,input,textarea{width:100%;border:1px solid var(--cinza-bd);
+  border-radius:5px;padding:6px 8px;font-size:12px;color:var(--texto);
+  background:white;outline:none;font-family:inherit}
+select:focus,input:focus,textarea:focus{border-color:var(--azul)}
+textarea{resize:vertical;min-height:52px;line-height:1.4}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.sep{height:1px;background:var(--cinza-bd);flex-shrink:0}
+.btn-main{width:100%;background:var(--azul);color:white;border:none;
+  border-radius:6px;padding:9px;font-size:13px;font-weight:700;
+  cursor:pointer;transition:background .15s}
+.btn-main:hover:not(:disabled){background:var(--azul-esc)}
+.btn-main:disabled{background:var(--muted);cursor:not-allowed}
+.key-inp{display:flex;gap:4px;margin-top:4px}
+.key-inp input{flex:1;font-size:11px;font-family:monospace}
+.key-inp button{background:var(--azul-cl);border:1px solid var(--azul);
+  border-radius:5px;padding:4px 8px;font-size:11px;color:var(--azul-esc);
+  cursor:pointer;white-space:nowrap;font-weight:700}
+.norma-box{background:var(--azul-cl);border-left:3px solid var(--azul);
+  border-radius:0 6px 6px 0;padding:8px 10px;font-size:10px;
+  color:var(--azul-esc);line-height:1.6}
+.log-area{background:#1a1a2e;color:#a0c4ff;font-family:monospace;
+  font-size:10px;padding:10px;border-radius:8px;
+  max-height:80px;overflow-y:auto;line-height:1.5}
+
+/* Estados */
+.empty{display:flex;flex-direction:column;align-items:center;
+  justify-content:center;color:var(--muted);text-align:center;
+  padding:60px 40px;min-height:300px}
+.empty .icon{font-size:40px;opacity:.35;margin-bottom:12px}
+.empty h3{font-size:15px;font-weight:500;margin-bottom:8px}
+.empty p{font-size:12px;line-height:1.6;max-width:320px}
+.spinner{width:30px;height:30px;border:3px solid var(--cinza-bd);
+  border-top:3px solid var(--azul);border-radius:50%;
+  animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Cards de resultado */
+.rcard{background:white;border:1px solid var(--cinza-bd);
+  border-radius:10px;overflow:hidden}
+.rcard-hdr{padding:12px 16px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--cinza-bd)}
+.rcard-hdr.nc{background:var(--verm-cl);border-bottom-color:#F7C1C1}
+.rcard-hdr.ok{background:var(--verde-cl);border-bottom-color:#C0DD97}
+.rcard-hdr.at{background:var(--ambar-cl);border-bottom-color:#FAC775}
+.vbadge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.vbadge.nc{background:var(--verm);color:white}
+.vbadge.ok{background:var(--verde);color:white}
+.vbadge.at{background:var(--ambar);color:white}
+.rcard-body{padding:14px;display:flex;flex-direction:column;gap:12px}
+.met-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.met{background:var(--cinza);border-radius:6px;padding:8px;text-align:center}
+.met .v{font-size:17px;font-weight:700}
+.met .l{font-size:9px;color:var(--muted);margin-top:2px;
+  text-transform:uppercase;letter-spacing:.04em}
+.met.r .v{color:var(--verm)}.met.a .v{color:var(--ambar)}.met.g .v{color:var(--verde)}
+.sh{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--muted);margin-bottom:6px;
+  padding-bottom:5px;border-bottom:1px solid var(--cinza-bd)}
+.dtxt{background:var(--cinza);border-radius:6px;padding:10px 12px;
+  font-size:12px;line-height:1.7}
+.nbox{background:var(--azul-cl);border:1px solid #B5D4F4;border-radius:8px;
+  padding:10px 12px;font-size:11px;color:var(--azul-esc);line-height:1.7}
+.nbox strong{font-size:9px;text-transform:uppercase;letter-spacing:.06em;
+  display:block;margin-bottom:3px}
+.hip-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hip{border:1px solid var(--cinza-bd);border-radius:8px;padding:8px 10px;
+  font-size:11px;background:white;position:relative}
+.hip.ha{border-left:3px solid var(--verm)}
+.hip.hm{border-left:3px solid var(--ambar)}
+.hip.hb{border-left:3px solid var(--cinza-bd)}
+.hip-cat{font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:3px}
+.hprob{position:absolute;top:6px;right:8px;font-size:9px;font-weight:700;
+  padding:1px 6px;border-radius:10px}
+.hprob.ha{background:var(--verm-cl);color:var(--verm)}
+.hprob.hm{background:var(--ambar-cl);color:var(--ambar)}
+.hprob.hb{background:var(--cinza);color:var(--muted)}
+.rec{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;
+  border-radius:6px;background:var(--cinza);margin-bottom:5px;
+  font-size:11px;line-height:1.6}
+.rprazo{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;
+  white-space:nowrap;flex-shrink:0;margin-top:1px}
+.rprazo.ri{background:var(--verm-cl);color:var(--verm)}
+.rprazo.rc{background:var(--ambar-cl);color:var(--ambar)}
+.rprazo.rm{background:var(--verde-cl);color:var(--verde)}
+.ai-tag{display:inline-flex;align-items:center;gap:4px;font-size:9px;
+  background:linear-gradient(135deg,#667eea,#764ba2);color:white;
+  padding:2px 7px;border-radius:10px;font-weight:700;margin-left:6px}
+.source-tag{font-size:9px;padding:2px 7px;border-radius:10px;
+  font-weight:700;margin-left:4px}
+.source-tag.local{background:var(--verde-cl);color:var(--verde)}
+.source-tag.ia{background:linear-gradient(135deg,#667eea44,#764ba244);color:#5a4ba2}
+
+/* ── CARD ISHIKAWA ─────────────────────────────────────────────────────
+   Classe separada: sem overflow:hidden para não cortar o SVG vertical.
+   O scroll horizontal fica APENAS neste card. */
+.rcard-ishi{
+  background:white;
+  border:1px solid var(--cinza-bd);
+  border-radius:10px;
+}
+.ishi-header{
+  padding:12px 16px 8px;
+  border-bottom:1px solid var(--cinza-bd);
+}
+.ishi-hint{
+  font-size:10px;color:var(--muted);
+  margin-top:3px;
+}
+/* Scroll só horizontal, vertical visível — nunca comprime o SVG */
+.ishi-scroll{
+  overflow-x:auto;
+  overflow-y:visible;
+  padding:16px;
+  background:#F4F3EF;
+  border-radius:0 0 10px 10px;
+  -webkit-overflow-scrolling:touch;
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="h-left">
+    <span class="badge">ENG207 · EQUIPE 2 · UFBA</span>
+    <h1>Sistema Metrológico Híbrido — CamaBier S.A.</h1>
+    <p>Modo Offline (motor local) + Modo IA opcional (API Anthropic Claude)</p>
+  </div>
+  <div class="mode-bar">
+    <div class="mode-pill">
+      <button id="btn-mode-off" class="active" onclick="setMode('offline')">⚡ Offline</button>
+      <button id="btn-mode-ia" onclick="setMode('ia')">🤖 IA</button>
+    </div>
+    <div id="api-status" class="off">● sem chave</div>
+  </div>
+</div>
+
+<div class="body">
+<!-- ESQUERDO -->
+<div class="left">
+  <div>
+    <div class="sec">Casos de teste <span>3 casos</span></div>
+    <button class="caso-btn" id="cb1" onclick="loadCaso(1)">
+      <strong>Caso 1 — BIC-03 subenchimento sistemático</strong>
+      <small>Média 350,96 mL · Cpk 1,57 · 99,5% abaixo do Qn</small>
+    </button>
+    <button class="caso-btn" id="cb2" onclick="loadCaso(2)">
+      <strong>Caso 2 — Pressão CO₂ inconsistente</strong>
+      <small>Registros em mbar misturados com bar · pico 3,2 bar</small>
+    </button>
+    <button class="caso-btn" id="cb3" onclick="loadCaso(3)">
+      <strong>Caso 3 — Ponto 31 fora do UCL (Carta X̄)</strong>
+      <small>L26-031 · X̄=357,07 mL · N=1 · Western Electric R1</small>
+    </button>
+  </div>
+
+  <div class="sep"></div>
+
+  <div>
+    <div class="sec">Dados do lote / medição</div>
+    <div style="margin-bottom:7px">
+      <label>Bico enchedor</label>
+      <select id="inp-bico">
+        <option value="">Selecione…</option>
+        <option>BIC-01</option><option>BIC-02</option><option>BIC-03</option>
+        <option>BIC-04</option><option>BIC-05</option><option>BIC-06</option>
+        <option>BIC-07</option><option>BIC-08</option><option>BIC-09</option>
+        <option>BIC-10</option><option>BIC-11</option><option>BIC-12</option>
+        <option>Geral (todos)</option>
+      </select>
+    </div>
+    <div class="g2" style="margin-bottom:7px">
+      <div><label>Volume X̄ (mL)</label><input type="number" id="inp-vol" step="0.01" placeholder="355.14"></div>
+      <div><label>Desvio s (mL)</label><input type="number" id="inp-dp" step="0.01" placeholder="2.14"></div>
+    </div>
+    <div class="g3" style="margin-bottom:7px">
+      <div><label>Cpk</label><input type="number" id="inp-cpk" step="0.01" placeholder="1.64"></div>
+      <div><label>N amostras</label><input type="number" id="inp-n" placeholder="385"></div>
+      <div><label>N &lt; Qn</label><input type="number" id="inp-abaixo" placeholder="0"></div>
+    </div>
+    <div style="margin-bottom:7px">
+      <label>Pressão CO₂ (bar)</label>
+      <input type="number" id="inp-co2" step="0.01" placeholder="2.70">
+    </div>
+    <div style="margin-bottom:8px">
+      <label>Descrição do problema</label>
+      <textarea id="inp-desc" placeholder="Descreva a anomalia observada…"></textarea>
+    </div>
+    <button class="btn-main" id="btn-analisar" onclick="analisar()">⚙ Analisar</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Configuração da chave de API -->
+  <div id="api-config-block">
+    <div class="sec">Modo IA — chave Anthropic</div>
+    <p style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:6px">
+      Opcional. No modo Offline tudo funciona sem chave. A chave fica salva só no seu navegador (localStorage).
+    </p>
+    <div class="key-inp">
+      <input type="password" id="inp-apikey" placeholder="sk-ant-api03-…">
+      <button onclick="salvarChave()">Salvar</button>
+    </div>
+    <div id="key-feedback" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="norma-box">
+    <strong style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Base normativa</strong>
+    📋 <strong>Portaria INMETRO 248/2008</strong> — Qn=355 mL, T=3%, LSL=344,35<br>
+    📊 <strong>AIAG SPC</strong> — Western Electric R1–R4<br>
+    📐 <strong>GUM / ABNT ISO/IEC 17025</strong> — U expandida k=2
+  </div>
+
+  <!-- Log de erros -->
+  <div>
+    <div class="sec" style="margin-bottom:4px">Log do sistema</div>
+    <div class="log-area" id="log-area">&gt; Sistema iniciado. Modo: Offline ativo.</div>
+  </div>
+</div>
+
+<!-- DIREITO -->
+<div class="right" id="panel-right">
+  <div class="empty">
+    <div class="icon">🔬</div>
+    <h3>Aguardando análise</h3>
+    <p>Selecione um dos 3 casos de teste ou preencha os dados manualmente e clique em <strong>Analisar</strong>.<br><br>
+    <strong>Modo Offline</strong> funciona sem internet ou chave de API.</p>
+  </div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURAÇÃO GLOBAL
+// ═══════════════════════════════════════════════════════════════
+const QN = 355, LSL = 344.35, USL = 365.65;
+const UCL = 355.876, LCL = 354.398, CL = 355.137;
+const S1P = 355.383, S2P = 355.629, S1N = 354.890, S2N = 354.644;
+let modoAtual = 'offline';
+
+const CAT_COLORS = {
+  'Máquina':'#185FA5','Método':'#3B6D11','Medição':'#BA7517',
+  'Material':'#993556','Mão de obra':'#533AB7','Meio amb.':'#0F6E56'
+};
+
+// ═══════════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════════
+function log(msg, tipo='info') {
+  const area = document.getElementById('log-area');
+  const ts = new Date().toLocaleTimeString('pt-BR');
+  const prefix = tipo==='err' ? '❌' : tipo==='warn' ? '⚠' : tipo==='ok' ? '✓' : '>';
+  area.innerHTML += `\n${prefix} [${ts}] ${msg}`;
+  area.scrollTop = area.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHAVE API
+// ═══════════════════════════════════════════════════════════════
+function salvarChave() {
+  const k = document.getElementById('inp-apikey').value.trim();
+  if (!k.startsWith('sk-ant-')) {
+    document.getElementById('key-feedback').innerHTML = '<span style="color:var(--verm)">Chave inválida — deve começar com sk-ant-</span>';
+    log('Chave inválida inserida', 'err');
+    return;
+  }
+  localStorage.setItem('anthropic_key', k);
+  document.getElementById('key-feedback').innerHTML = '<span style="color:var(--verde)">✓ Chave salva no navegador</span>';
+  document.getElementById('inp-apikey').value = '';
+  atualizarStatusAPI();
+  log('Chave Anthropic salva com sucesso', 'ok');
+}
+
+function getChave() { return localStorage.getItem('anthropic_key') || ''; }
+
+function atualizarStatusAPI() {
+  const el = document.getElementById('api-status');
+  const k = getChave();
+  if (!k) { el.textContent='● sem chave'; el.className='off'; return; }
+  el.textContent='● chave ok'; el.className='ok';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODO
+// ═══════════════════════════════════════════════════════════════
+function setMode(m) {
+  modoAtual = m;
+  document.getElementById('btn-mode-off').classList.toggle('active', m==='offline');
+  document.getElementById('btn-mode-ia').classList.toggle('active', m==='ia');
+  const lbl = m==='offline' ? '⚡ Analisar (Offline)' : '🤖 Analisar com IA';
+  document.getElementById('btn-analisar').textContent = lbl;
+  log(`Modo alterado para: ${m.toUpperCase()}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CASOS DE TESTE
+// ═══════════════════════════════════════════════════════════════
+const CASOS = {
+  1:{bico:'BIC-03',vol:350.96,dp:1.40,cpk:1.57,n:384,abaixo:382,co2:2.70,
+     desc:'Volume médio do BIC-03 está sistematicamente 4,04 mL abaixo do Qn=355 mL. De 384 amostras, 382 estão abaixo do Qn (99,5%). O desvio é constante em todos os 31 dias e nos 3 turnos. Cpk=1,57. O desvio é 17x superior à incerteza do FL-501 (U=0,24 mL), descartando erro de medição.'},
+  2:{bico:'Geral (todos)',vol:355.14,dp:2.14,cpk:1.64,n:4972,abaixo:2181,co2:2850,
+     desc:'Coluna pressão_CO2_bar com inconsistência de unidade: maioria dos registros na faixa 2500-2900 (mbar) mas alguns na faixa 2,4-3,2 bar. Pico de 3,2 bar em alguns lotes. Alvo é 2,7 bar.'},
+  3:{bico:'Geral (todos)',vol:357.07,dp:0,cpk:null,n:1,abaixo:0,co2:2.70,
+     desc:'Lote L26-031 (Ponto 31 da Carta X̄) com X̄=357,07 mL, acima do UCL=355,88 mL. Única violação da Regra 1 de Western Electric nos 31 lotes. N=1 amostra (subgrupo não representativo). Regras 2, 3 e 4 não violadas.'}
+};
+
+function loadCaso(n) {
+  [1,2,3].forEach(i => document.getElementById('cb'+i).classList.remove('active'));
+  document.getElementById('cb'+n).classList.add('active');
+  const c = CASOS[n];
+  document.getElementById('inp-bico').value   = c.bico;
+  document.getElementById('inp-vol').value    = c.vol;
+  document.getElementById('inp-dp').value     = c.dp;
+  document.getElementById('inp-cpk').value    = c.cpk ?? '';
+  document.getElementById('inp-n').value      = c.n;
+  document.getElementById('inp-abaixo').value = c.abaixo;
+  document.getElementById('inp-co2').value    = c.co2;
+  document.getElementById('inp-desc').value   = c.desc;
+  log(`Caso ${n} carregado: ${c.bico}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MOTOR LOCAL — ANÁLISE 100% OFFLINE
+// ═══════════════════════════════════════════════════════════════
+function analisarLocal(d) {
+  const desvio = d.vol - QN;
+  const pct    = d.n > 0 ? (d.abaixo / d.n) * 100 : 0;
+
+  // ── 1. Veredicto e severidade ──────────────────────────────
+  let veredicto, severidade;
+  if (d.vol < LSL) {
+    veredicto = 'NÃO CONFORME'; severidade = 'ALTA';
+  } else if (Math.abs(desvio) > 4 || pct > 90) {
+    veredicto = 'NÃO CONFORME'; severidade = 'ALTA';
+  } else if (Math.abs(desvio) > 1.5 || pct > 50) {
+    veredicto = 'ATENÇÃO'; severidade = 'MÉDIA';
+  } else if (d.vol > UCL || d.vol < LCL) {
+    veredicto = 'ATENÇÃO'; severidade = 'MÉDIA';
+  } else {
+    veredicto = 'CONFORME'; severidade = 'BAIXA';
+  }
+
+  // ── 2. Cpk semáforo ──────────────────────────────────────
+  let cpkStatus = '—';
+  if (d.cpk !== null && d.cpk !== undefined && !isNaN(d.cpk)) {
+    cpkStatus = d.cpk >= 1.67 ? '✓ Capaz' : d.cpk >= 1.33 ? '⚠ Limítrofe' : '✗ Incapaz';
+  }
+
+  // ── 3. Western Electric na média informada ────────────────
+  let weViol = [];
+  if (d.vol > UCL || d.vol < LCL) weViol.push('R1: ponto além de ±3σ');
+
+  // ── 4. Verificação CO₂ ───────────────────────────────────
+  const co2Suspeito = d.co2 > 100; // provavelmente em mbar
+  const co2Val = co2Suspeito ? (d.co2 / 1000).toFixed(2) : d.co2;
+  const co2NC  = parseFloat(co2Val) < 2.4 || parseFloat(co2Val) > 3.0;
+
+  // ── 5. Portaria 248 — critério c ─────────────────────────
+  // Para Qn=355 mL, n≈167, critério c (max amostras abaixo de Qn-T)
+  // T=10,65 mL, Qn-T=344,35 mL (limite inferior)
+  // Regra: não mais que 2% das amostras podem estar abaixo de Qn-T
+  // E: média da amostra >= Qn (Art. 8°, Portaria 248/2008)
+  const violaMedia    = d.vol < QN;
+  const violaLimitInf = d.n > 0 && (d.abaixo / d.n) > 0.02 && d.vol < QN;
+
+  // ── 6. Título ────────────────────────────────────────────
+  let titulo;
+  if (Math.abs(desvio) >= 4) titulo = `Subenchimento sistemático em ${d.bico} (${desvio.toFixed(2)} mL)`;
+  else if (weViol.length)    titulo = `Ponto fora de controle estatístico — ${d.bico}`;
+  else if (co2NC)            titulo = `Pressão CO₂ fora da faixa alvo (${co2Val} bar)`;
+  else if (veredicto==='ATENÇÃO') titulo = `Desvio de volume em ${d.bico} requer atenção`;
+  else                       titulo = `Processo ${d.bico} em conformidade`;
+
+  // ── 7. Resumo técnico ────────────────────────────────────
+  let resumo = '';
+  if (veredicto === 'NÃO CONFORME' && desvio < -1) {
+    resumo = `O ${d.bico} apresenta volume médio X̄ = ${d.vol} mL, um desvio de ${desvio.toFixed(2)} mL abaixo do Qn = 355 mL. `
+           + `De ${d.n} amostras analisadas, ${d.abaixo} (${pct.toFixed(1)}%) estão abaixo do volume nominal. `
+           + `O desvio é ${(Math.abs(desvio)/0.24).toFixed(0)}× superior à incerteza do FL-501 (U=0,24 mL), confirmando anomalia real no bico enchedor.`;
+  } else if (weViol.length) {
+    resumo = `O ponto analisado viola a regra ${weViol.join(', ')} do AIAG SPC Manual (Western Electric). `
+           + `O volume X̄ = ${d.vol} mL ultrapassa o ${d.vol > UCL ? 'UCL = '+UCL : 'LCL = '+LCL} mL. `
+           + (d.n === 1 ? 'Atenção: subgrupo com N=1 amostra é estatisticamente não representativo — verificar se é dado atípico ou erro de registro.' : '');
+  } else if (co2NC && co2Suspeito) {
+    resumo = `A pressão CO₂ foi registrada como ${d.co2} (provavelmente em mbar), equivalente a ${co2Val} bar. `
+           + `O valor está ${parseFloat(co2Val) < 2.4 ? 'abaixo do mínimo de 2,4 bar' : 'acima do máximo de 3,0 bar'}. `
+           + 'Há inconsistência de unidade nos dados — parte dos registros está em bar e parte em mbar, indicando falha de rastreabilidade metrológica no MAN-601.';
+  } else if (veredicto === 'CONFORME') {
+    resumo = `O ${d.bico} apresenta volume médio X̄ = ${d.vol} mL, dentro da faixa nominal (LSL=${LSL} mL, USL=${USL} mL). `
+           + (d.cpk ? `Cpk = ${d.cpk} indica processo ${d.cpk >= 1.33 ? 'capaz' : 'com capacidade marginal'}. ` : '')
+           + 'Nenhuma violação das regras Western Electric foi detectada com os dados fornecidos.';
+  } else {
+    resumo = `O processo apresenta desvio de ${desvio.toFixed(2)} mL em relação ao Qn = 355 mL. `
+           + `${pct.toFixed(1)}% das amostras estão abaixo do volume nominal. Monitoramento contínuo recomendado.`;
+  }
+
+  // ── 8. Norma violada ─────────────────────────────────────
+  let norma;
+  if (violaMedia) {
+    norma = 'Portaria INMETRO 248/2008, Art. 8°: "A quantidade média das unidades de produto pré-medido de um lote não pode ser inferior ao valor nominal Qn." Violação confirmada: X̄ = ' + d.vol + ' mL < Qn = 355 mL.';
+  } else if (weViol.length) {
+    norma = 'AIAG SPC Manual (2002), Regra 1 de Western Electric: ponto além de ±3σ indica causa especial de variação. Ação corretiva imediata requerida conforme ISO 7870-2.';
+  } else if (co2NC) {
+    norma = 'ABNT NBR ISO/IEC 17025:2017 — rastreabilidade metrológica obrigatória. Decreto 6.871/2009 (PIQ Cerveja): teor de CO₂ deve estar em conformidade com o padrão de identidade e qualidade.';
+  } else {
+    norma = 'Portaria INMETRO 248/2008 — Processo em conformidade com os requisitos metrológicos para produtos pré-medidos. Manter monitoramento conforme plano de amostragem ABNT NBR 5426.';
+  }
+
+  // ── 9. Ishikawa automático ────────────────────────────────
+  const ishikawa = gerarIshikawaLocal(d, desvio, pct, co2Suspeito, co2NC);
+
+  // ── 10. Recomendações ────────────────────────────────────
+  const recs = gerarRecomendacoes(d, desvio, veredicto, co2NC, co2Suspeito, weViol);
+
+  return {
+    veredicto, titulo, resumo, norma_violada: norma,
+    metricas: { desvio_qn: parseFloat(desvio.toFixed(2)), percentual_nc: parseFloat(pct.toFixed(1)), severidade },
+    ishikawa, recomendacoes: recs,
+    cpkStatus, weViol, co2Val, co2Suspeito,
+    fonte: 'local'
+  };
+}
+
+// ── Ishikawa local por tipo de problema ──────────────────────────────────
+function gerarIshikawaLocal(d, desvio, pct, co2Suspeito, co2NC) {
+  const efeito = Math.abs(desvio) >= 3
+    ? `Subenchimento BIC-03`
+    : co2NC ? `CO₂ fora do alvo`
+    : d.vol > UCL ? `Sobrechimento detectado`
+    : `Desvio de volume`;
+
+  let causas = [];
+
+  if (Math.abs(desvio) >= 3 && desvio < 0) {
+    // Subenchimento sistemático
+    causas = [
+      {categoria:'Máquina',    causa:'Bico enchedor desgastado', probabilidade:'ALTA',   evidencia:`Desvio constante ${desvio.toFixed(2)} mL em 31 dias consecutivos`},
+      {categoria:'Máquina',    causa:'Válvula de enchimento travada', probabilidade:'ALTA', evidencia:`99,5% das amostras abaixo do Qn — padrão mecânico`},
+      {categoria:'Método',     causa:'Tempo de enchimento incorreto', probabilidade:'MÉDIA', evidencia:`Desvio sistemático sugere ajuste de parâmetro`},
+      {categoria:'Medição',    causa:'FL-501 fora de calibração', probabilidade:'BAIXA',  evidencia:`Desvio 17× > incerteza U=0,24 mL — instrumento não é causa`},
+      {categoria:'Mão de obra',causa:'Ajuste de bico não realizado', probabilidade:'MÉDIA', evidencia:`Desvio persiste nos 3 turnos — processo não corrigido`},
+      {categoria:'Meio amb.',  causa:'Variação de temperatura', probabilidade:'BAIXA',    evidencia:`Temperatura alvo 2°C — verificar TC-202`},
+    ];
+  } else if (co2NC || co2Suspeito) {
+    causas = [
+      {categoria:'Medição',    causa:'Unidade inconsistente (mbar/bar)', probabilidade:'ALTA',  evidencia:`MAN-601: registros misturados 2500-2900 (mbar) e 2,4-3,2 bar`},
+      {categoria:'Método',     causa:'Falta de rastreabilidade', probabilidade:'ALTA',   evidencia:`ABNT NBR ISO/IEC 17025: unidade deve ser SI`},
+      {categoria:'Máquina',    causa:'Transdutor MAN-601 sem calibração', probabilidade:'MÉDIA', evidencia:`Verificar última calibração do MAN-601`},
+      {categoria:'Mão de obra',causa:'Erro de configuração do sensor', probabilidade:'MÉDIA', evidencia:`Dois padrões de unidade no mesmo dataset`},
+    ];
+  } else if (d.vol > UCL) {
+    causas = [
+      {categoria:'Máquina',    causa:'Sobrepressão no enchimento', probabilidade:'ALTA',   evidencia:`X̄=${d.vol} mL > UCL=${UCL} mL`},
+      {categoria:'Método',     causa:'Parâmetro de enchimento incorreto', probabilidade:'ALTA', evidencia:`N=1 amostra — possível dado atípico`},
+      {categoria:'Medição',    causa:'Erro de registro (N=1)', probabilidade:'MÉDIA',      evidencia:`Subgrupo com N=1 não é representativo`},
+    ];
+  } else {
+    causas = [
+      {categoria:'Máquina',    causa:'Variação normal do processo', probabilidade:'BAIXA',  evidencia:`Desvio dentro dos limites de controle`},
+      {categoria:'Método',     causa:'Processo sob controle', probabilidade:'BAIXA',        evidencia:`Cpk=${d.cpk ?? 'N/A'} — verificar tendência`},
+    ];
+  }
+
+  return { efeito, causas };
+}
+
+// ── Recomendações automáticas ─────────────────────────────────────────────
+function gerarRecomendacoes(d, desvio, veredicto, co2NC, co2Suspeito, weViol) {
+  const recs = [];
+
+  if (Math.abs(desvio) >= 3 && desvio < 0) {
+    recs.push({prazo:'IMEDIATO', acao:'Parar e recalibrar o BIC-03 imediatamente. Verificar válvula de enchimento e tempo de ciclo. Portaria INMETRO 248/2008, Art. 8°.'});
+    recs.push({prazo:'IMEDIATO', acao:'Segregar e re-inspecionar lotes do mês com BIC-03. Aplicar critério c da Portaria 248/2008 para decisão de aceite/rejeição.'});
+    recs.push({prazo:'CURTO',    acao:'Realizar MSA (Gage R&R) no FL-501 para confirmar que o erro não é do instrumento. ABNT NBR ISO/IEC 17025.'});
+    recs.push({prazo:'MÉDIO',    acao:'Implementar carta de controle individual por bico com alarme automático ao cruzar ±2σ. AIAG SPC Manual, Regra R4.'});
+  } else if (co2Suspeito) {
+    recs.push({prazo:'IMEDIATO', acao:'Padronizar unidade de registro do MAN-601 para bar (SI). Rastreabilidade obrigatória conforme ABNT NBR ISO/IEC 17025:2017, cláusula 6.4.'});
+    recs.push({prazo:'CURTO',    acao:'Calibrar MAN-601 e emitir novo certificado de calibração com incerteza expandida U (k=2).'});
+    recs.push({prazo:'MÉDIO',    acao:'Corrigir sistema de aquisição para garantir unidade SI em todos os registros. Decreto 6.871/2009, PIQ Cerveja.'});
+  } else if (weViol.length) {
+    recs.push({prazo:'IMEDIATO', acao:`Investigar causa especial de variação no lote ${d.bico}. Verificar se N=1 é dado válido ou erro de registro. AIAG SPC Manual.`});
+    recs.push({prazo:'CURTO',    acao:'Excluir subgrupo N=1 da análise de capacidade e recalcular Cp, Cpk, UCL e LCL com os 30 lotes restantes.'});
+  } else if (veredicto === 'CONFORME') {
+    recs.push({prazo:'MÉDIO',    acao:'Manter monitoramento com carta X̄-R. Realizar auditoria semestral conforme Portaria INMETRO 248/2008.'});
+    recs.push({prazo:'MÉDIO',    acao:'Verificar calibração dos 4 instrumentos (FL-501, TC-202, MAN-601, LVL-701) dentro do intervalo programado.'});
+  }
+
+  return recs;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHAMADA API ANTHROPIC (com todos os headers corretos)
+// ═══════════════════════════════════════════════════════════════
+async function chamarAPI(d) {
+  const chave = getChave();
+  if (!chave) throw new Error('Chave Anthropic não configurada. Insira a chave no painel esquerdo.');
+
+  const pct = d.n > 0 ? ((d.abaixo/d.n)*100).toFixed(1) : '0.0';
+
+  const SYSTEM = `Você é especialista em metrologia industrial e CEP na linha de envase 355 mL da CamaBier S.A.
+CONTEXTO: Qn=355 mL, T=3%, LSL=344,35, UCL=355,88, LCL=354,40, CL=355,14, FL-501 U=0,24 mL (k=2).
+O motor local já calculou veredicto, Ishikawa e recomendações. Sua tarefa é COMPLEMENTAR com:
+1. Análise mais profunda das causas-raiz
+2. Comparações com benchmarks da indústria cervejeira
+3. Implicações regulatórias específicas (MAPA, INMETRO, Decreto 6871/2009)
+4. Perspectivas de melhoria a médio e longo prazo
+Responda em JSON puro sem markdown:
+{"comentario_ia":"parágrafo rico de 4-6 frases com análise complementar","causas_adicionais":[{"categoria":"Máquina"|"Método"|"Medição"|"Material"|"Mão de obra"|"Meio amb.","causa":"string","probabilidade":"ALTA"|"MÉDIA"|"BAIXA","evidencia":"string"}],"recomendacao_adicional":{"prazo":"IMEDIATO"|"CURTO"|"MÉDIO","acao":"string com referência normativa"}}`;
+
+  const USER = `Dados: Bico=${d.bico}, X̄=${d.vol}mL, s=${d.dp}mL, Cpk=${d.cpk??'N/A'}, N=${d.n}, N<Qn=${d.abaixo}(${pct}%), CO₂=${d.co2}
+Problema: ${d.desc}
+Complemente a análise do motor local com insights adicionais.`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': chave,                          // ← header correto
+        'anthropic-version': '2023-06-01',            // ← obrigatório
+        'anthropic-dangerous-direct-browser-access': 'true' // ← para browser
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: USER }]
+      })
+    });
+
+    clearTimeout(timeout);
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      const errMsg = errData?.error?.message || `HTTP ${resp.status}`;
+      throw new Error(`API Anthropic: ${errMsg}`);
+    }
+
+    const data = await resp.json();
+
+    // Validação da resposta
+    if (!data.content || !Array.isArray(data.content) || data.content.length === 0) {
+      throw new Error('Resposta da API sem conteúdo válido');
+    }
+
+    const textBlock = data.content.find(b => b.type === 'text');
+    if (!textBlock?.text) throw new Error('Bloco de texto ausente na resposta da API');
+
+    const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+    const parsed  = JSON.parse(cleaned);
+
+    if (!parsed.comentario_ia) throw new Error('JSON da API sem campo comentario_ia');
+
+    return parsed;
+
+  } catch(e) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') throw new Error('Timeout: API não respondeu em 30 segundos');
+    throw e;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FUNÇÃO PRINCIPAL — ORQUESTRA OFFLINE + IA
+// ═══════════════════════════════════════════════════════════════
+async function analisar() {
+  const btn   = document.getElementById('btn-analisar');
+  const panel = document.getElementById('panel-right');
+
+  const d = {
+    bico:   document.getElementById('inp-bico').value   || 'Não especificado',
+    vol:    parseFloat(document.getElementById('inp-vol').value)    || 355.14,
+    dp:     parseFloat(document.getElementById('inp-dp').value)     || 0,
+    cpk:    document.getElementById('inp-cpk').value !== '' ? parseFloat(document.getElementById('inp-cpk').value) : null,
+    n:      parseInt(document.getElementById('inp-n').value)        || 0,
+    abaixo: parseInt(document.getElementById('inp-abaixo').value)   || 0,
+    co2:    parseFloat(document.getElementById('inp-co2').value)    || 2.70,
+    desc:   document.getElementById('inp-desc').value   || ''
+  };
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Analisando…';
+  log(`Iniciando análise: ${d.bico} | vol=${d.vol} | modo=${modoAtual}`);
+
+  panel.innerHTML = `<div class="empty"><div class="spinner"></div>
+    <p style="color:var(--azul);font-weight:600">${modoAtual==='ia' ? 'Consultando API Anthropic…' : 'Calculando análise local…'}</p>
+    <p style="font-size:11px;margin-top:4px">Bico: ${d.bico}</p></div>`;
+
+  try {
+    // 1. Motor local (sempre roda — base do resultado)
+    const local = analisarLocal(d);
+    log(`Motor local: ${local.veredicto} | sev=${local.metricas.severidade}`, 'ok');
+
+    // 2. Se modo IA, tentar complementar
+    let iaData = null;
+    if (modoAtual === 'ia') {
+      try {
+        log('Chamando API Anthropic…');
+        iaData = await chamarAPI(d);
+        log('API respondeu com sucesso', 'ok');
+        document.getElementById('api-status').textContent = '● IA ativa';
+        document.getElementById('api-status').className   = 'ok';
+      } catch(apiErr) {
+        log(`API falhou: ${apiErr.message} — exibindo resultado local`, 'warn');
+        document.getElementById('api-status').textContent = '● API offline';
+        document.getElementById('api-status').className   = 'err';
+      }
+    }
+
+    // 3. Renderizar resultado combinado
+    panel.innerHTML = renderResultado(local, iaData, d);
+    log('Resultado renderizado com sucesso', 'ok');
+
+  } catch(err) {
+    log(`Erro fatal: ${err.message}`, 'err');
+    panel.innerHTML = `<div class="empty">
+      <div class="icon">⚠️</div>
+      <h3 style="color:var(--verm)">Erro na análise</h3>
+      <p>${err.message}</p>
+      <p style="margin-top:8px;font-size:11px">Verifique o log abaixo para detalhes.</p>
+    </div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = modoAtual==='offline' ? '⚡ Analisar (Offline)' : '🤖 Analisar com IA';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDERIZAÇÃO
+// ═══════════════════════════════════════════════════════════════
+function renderResultado(r, ia, d) {
+  const desvio = (d.vol - QN).toFixed(2);
+  const pct    = d.n > 0 ? ((d.abaixo/d.n)*100).toFixed(1) : '0.0';
+  const tipo   = r.veredicto==='NÃO CONFORME' ? 'nc' : r.veredicto==='ATENÇÃO' ? 'at' : 'ok';
+  const devC   = parseFloat(desvio) < -1 ? 'r' : parseFloat(desvio) > 1 ? 'a' : 'g';
+  const pctC   = parseFloat(pct) > 50 ? 'r' : parseFloat(pct) > 20 ? 'a' : 'g';
+  const cpkC   = d.cpk && d.cpk < 1.33 ? 'r' : d.cpk && d.cpk < 1.67 ? 'a' : 'g';
+  const sevC   = r.metricas.severidade==='ALTA' ? 'r' : r.metricas.severidade==='MÉDIA' ? 'a' : 'g';
+  const srcTag = ia ? '<span class="source-tag ia">🤖 IA</span>' : '<span class="source-tag local">⚡ Local</span>';
+
+  // Causas: combinar local + IA (dedup por causa)
+  const todasCausas = [...(r.ishikawa.causas||[])];
+  if (ia?.causas_adicionais) {
+    ia.causas_adicionais.forEach(c => {
+      if (!todasCausas.find(t => t.causa === c.causa)) todasCausas.push({...c, fonte:'ia'});
+    });
+  }
+
+  // Recomendações: local + IA
+  const todasRecs = [...(r.recomendacoes||[])];
+  if (ia?.recomendacao_adicional) todasRecs.push({...ia.recomendacao_adicional, fonte:'ia'});
+
+  const hipCards = todasCausas.map(c => {
+    const pc = c.probabilidade==='ALTA' ? 'ha' : c.probabilidade==='MÉDIA' ? 'hm' : 'hb';
+    const cor = CAT_COLORS[c.categoria] || '#888780';
+    const iaIcon = c.fonte==='ia' ? ' <span class="ai-tag">🤖</span>' : '';
+    return `<div class="hip ${pc}">
+      <div class="hip-cat" style="color:${cor}">● ${c.categoria}${iaIcon}</div>
+      <span class="hprob ${pc}">${c.probabilidade}</span>
+      <div style="font-weight:700;margin-bottom:3px;font-size:12px">${c.causa}</div>
+      <div style="color:var(--muted);font-size:10px">${c.evidencia}</div>
+    </div>`;
+  }).join('');
+
+  const recItems = todasRecs.map(rec => {
+    const pc = rec.prazo==='IMEDIATO' ? 'ri' : rec.prazo==='CURTO' ? 'rc' : 'rm';
+    const iaIcon = rec.fonte==='ia' ? ' <span class="ai-tag" style="font-size:8px">🤖 IA</span>' : '';
+    return `<div class="rec"><span class="rprazo ${pc}">${rec.prazo}</span><span>${rec.acao}${iaIcon}</span></div>`;
+  }).join('');
+
+  const ishSVG = renderIshikawa(r.ishikawa.efeito, todasCausas);
+
+  const iaBlock = ia ? `
+    <div class="rcard">
+      <div class="rcard-body">
+        <div class="sh">Análise aprofundada <span class="ai-tag">🤖 Claude</span></div>
+        <div class="dtxt">${ia.comentario_ia}</div>
+      </div>
+    </div>` : '';
+
+  return `
+    <div class="rcard">
+      <div class="rcard-hdr ${tipo}">
+        <span class="vbadge ${tipo}">${r.veredicto}</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">${r.titulo} ${srcTag}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${d.bico} · ${d.n} amostras · Maio 2026</div>
+        </div>
+      </div>
+      <div class="rcard-body">
+        <div class="met-grid">
+          <div class="met ${devC}"><div class="v">${parseFloat(desvio)>0?'+':''}${desvio} mL</div><div class="l">Desvio Qn</div></div>
+          <div class="met ${pctC}"><div class="v">${pct}%</div><div class="l">Abaixo Qn</div></div>
+          <div class="met ${cpkC}"><div class="v">${d.cpk??'—'}</div><div class="l">Cpk</div></div>
+          <div class="met ${sevC}"><div class="v">${r.metricas.severidade}</div><div class="l">Severidade</div></div>
+        </div>
+        <div><div class="sh">Diagnóstico técnico</div><div class="dtxt">${r.resumo}</div></div>
+        <div class="nbox"><strong>Base normativa</strong>${r.norma_violada}</div>
+      </div>
+    </div>
+
+    ${iaBlock}
+
+    <div class="rcard-ishi">
+      <div class="ishi-header">
+        <div class="sh">Diagrama de Ishikawa — causa e efeito</div>
+        <div class="ishi-hint">&#8592;&#8594; Deslize para ver o diagrama completo</div>
+      </div>
+      <div class="ishi-scroll">${ishSVG}</div>
+    </div>
+
+    <div class="rcard">
+      <div class="rcard-body">
+        <div><div class="sh">Hipóteses de causa-raiz</div><div class="hip-grid">${hipCards}</div></div>
+        <div><div class="sh">Recomendações normativas</div>${recItems}</div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ISHIKAWA SVG
+// ═══════════════════════════════════════════════════════════════
+function renderIshikawa(efeito, causas) {
+  /* viewBox 1000×460 — tamanho compacto e legível
+   * Espinha: y=230, x=80..760
+   * Efeito : x=780..960
+   * TOP    : Máquina x=180 | Medição x=430 | Meio amb. x=680
+   * BOT    : Método  x=260 | Mão de obra x=520 | Material x=760
+   * Cada categoria tem zona de texto exclusiva (sem overlap)
+   * Scroll horizontal APENAS no container .ishi-scroll
+   */
+
+  // Constantes de layout
+  const W=1000, H=460, CY=230;
+  const SP_X1=80, SP_X2=760;
+  const EF_X=780, EF_W=180, EF_CX=870;
+
+  // Slots fixos por categoria (nome → posição x de junção na espinha)
+  const SLOT = {
+    'Máquina':     {jx:200, top:true,  bx:110, by:38},
+    'Medição':     {jx:420, top:true,  bx:330, by:38},
+    'Meio amb.':   {jx:640, top:true,  bx:555, by:38},
+    'Método':      {jx:280, top:false, bx:185, by:390},
+    'Mão de obra': {jx:500, top:false, bx:398, by:390},
+    'Material':    {jx:700, top:false, bx:610, by:390},
+  };
+
+  // Agrupar causas por categoria
+  const cats = {};
+  (causas||[]).forEach(c => {
+    if (!cats[c.categoria]) cats[c.categoria] = [];
+    cats[c.categoria].push(c);
+  });
+
+  // Texto seguro para SVG
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const trunc = (s, n) => s.length > n ? s.substring(0, n-1)+'…' : s;
+
+  // Quebrar efeito em até 2 linhas de 16 chars
+  const efWords = esc(efeito||'Efeito').split(' ');
+  const efLines = [];
+  let efCur = '';
+  efWords.forEach(w => {
+    const t = efCur ? efCur+' '+w : w;
+    if (t.length <= 16) efCur = t;
+    else { if (efCur) efLines.push(efCur); efCur = w; }
+  });
+  if (efCur) efLines.push(efCur);
+  const EF_H = efLines.length * 22 + 36;
+  const EF_Y = CY - EF_H/2;
+
+  // Abrir SVG com dimensões fixas reais — sem width:100%
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"`
+        + ` xmlns="http://www.w3.org/2000/svg"`
+        + ` style="display:block;min-width:${W}px">`;
+
+  // Fundo
+  s += `<rect width="${W}" height="${H}" fill="#F4F3EF" rx="10"/>`;
+
+  // ── Espinha dorsal ────────────────────────────────────────────
+  s += `<line x1="${SP_X1}" y1="${CY}" x2="${SP_X2}" y2="${CY}"`
+     + ` stroke="#9E9B95" stroke-width="4"/>`;
+  // Seta
+  s += `<polygon points="${SP_X2},${CY} ${SP_X2-14},${CY-7} ${SP_X2-14},${CY+7}"`
+     + ` fill="#9E9B95"/>`;
+  // Tracejado espinha → efeito
+  s += `<line x1="${SP_X2}" y1="${CY}" x2="${EF_X}" y2="${CY}"`
+     + ` stroke="#E24B4A" stroke-width="2" stroke-dasharray="6,3"/>`;
+
+  // ── Caixa do efeito ───────────────────────────────────────────
+  s += `<rect x="${EF_X}" y="${EF_Y}" width="${EF_W}" height="${EF_H}"`
+     + ` rx="10" fill="#FCEBEB" stroke="#E24B4A" stroke-width="2.5"/>`;
+  efLines.forEach((ln,i) => {
+    s += `<text x="${EF_CX}" y="${EF_Y+22+i*22}"`
+       + ` text-anchor="middle" font-size="13" font-weight="700"`
+       + ` fill="#791F1F" font-family="Arial,sans-serif">${ln}</text>`;
+  });
+  s += `<text x="${EF_CX}" y="${EF_Y+EF_H-8}"`
+     + ` text-anchor="middle" font-size="9" fill="#E24B4A"`
+     + ` font-family="Arial,sans-serif">CamaBier S.A.</text>`;
+
+  // ── Renderizar cada categoria ─────────────────────────────────
+  Object.keys(SLOT).forEach(cat => {
+    if (!cats[cat]) return;          // categoria sem causas: pular
+    const sl    = SLOT[cat];
+    const color = CAT_COLORS[cat] || '#888780';
+    const cl    = cats[cat];
+    const isTop = sl.top;
+
+    // Origem da diagonal (ponto no extremo topo/baixo)
+    const ox = sl.jx - 50;
+    const oy = isTop ? 128 : 332;   // dentro do viewBox 460
+
+    // Diagonal principal
+    s += `<line x1="${ox}" y1="${oy}" x2="${sl.jx}" y2="${CY}"`
+       + ` stroke="${color}" stroke-width="2.8"/>`;
+
+    // Badge da categoria
+    const BW = 110, BH = 24;
+    const bcx = sl.bx + BW/2;
+    s += `<rect x="${sl.bx}" y="${sl.by}" width="${BW}" height="${BH}"`
+       + ` rx="5" fill="${color}"/>`;
+    s += `<text x="${bcx}" y="${sl.by+16}"`
+       + ` text-anchor="middle" font-size="12" font-weight="700"`
+       + ` fill="white" font-family="Arial,sans-serif">${cat}</text>`;
+
+    // Causas — zona vertical exclusiva por categoria
+    // TOP: causas crescem de oy para cima (y decresce de oy-20)
+    // BOT: causas crescem de oy para baixo (y cresce de oy+20)
+    const STEP = 52;   // espaço vertical entre causas (evita overlap)
+
+    cl.slice(0,3).forEach((c, ci) => {
+      // Ponto na diagonal para fixar a ramificação
+      const t  = 0.20 + ci * 0.30;
+      const px = ox + (sl.jx - ox) * t;
+      const py = oy + (CY - oy) * t;
+
+      // Extremidade da ramificação (horizontal à esquerda)
+      const BLEN = 120;
+      const ex = Math.max(px - BLEN, SP_X1 + 4);
+      const ey = py + (isTop ? -6 : 6);
+
+      const pc = c.probabilidade==='ALTA'  ? '#E24B4A'
+               : c.probabilidade==='MÉDIA' ? '#BA7517' : '#888780';
+
+      // Linha ramificação
+      s += `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}"`
+         + ` stroke="${color}" stroke-width="1.6" stroke-dasharray="4,3" opacity=".8"/>`;
+      // Marcador
+      s += `<circle cx="${ex}" cy="${ey}" r="5.5" fill="${pc}"`
+         + ` stroke="white" stroke-width="1.8"/>`;
+
+      // Texto da causa (linha 1) + evidência (linha 2)
+      const tx  = ex + 12;
+      const ty1 = isTop ? ey - 8  : ey + 4;
+      const ty2 = isTop ? ey + 8  : ey + 18;
+      const cauTxt = trunc(esc(c.causa), 32);
+      const evTxt  = c.evidencia ? trunc(esc(c.evidencia), 36) : '';
+
+      s += `<text x="${tx}" y="${ty1}"`
+         + ` font-size="11" font-weight="600" fill="#1C1C1A"`
+         + ` font-family="Arial,sans-serif">${cauTxt}</text>`;
+      if (evTxt) {
+        s += `<text x="${tx}" y="${ty2}"`
+           + ` font-size="9.5" fill="#888780"`
+           + ` font-family="Arial,sans-serif" font-style="italic">${evTxt}</text>`;
+      }
+    });
+  });
+
+  // ── Legenda ───────────────────────────────────────────────────
+  const LX=SP_X1, LY=H-36;
+  s += `<rect x="${LX}" y="${LY}" width="224" height="26"`
+     + ` rx="6" fill="white" stroke="#D3D1C7" stroke-width="1"/>`;
+  s += `<text x="${LX+10}" y="${LY+17}"`
+     + ` font-size="10" font-weight="700" fill="#888780"`
+     + ` font-family="Arial,sans-serif">PROBABILIDADE:</text>`;
+  [['ALTA','#E24B4A',LX+116],['MÉDIA','#BA7517',LX+158],['BAIXA','#888780',LX+198]]
+    .forEach(([l,clr,x]) => {
+      s += `<circle cx="${x}" cy="${LY+13}" r="6" fill="${clr}"/>`;
+      s += `<text x="${x+9}" y="${LY+18}"`
+         + ` font-size="10" fill="#2C2C2A"`
+         + ` font-family="Arial,sans-serif">${l}</text>`;
+    });
+
+  s += '</svg>';
+  return s;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// INICIALIZAÇÃO
+// ═══════════════════════════════════════════════════════════════
+window.onload = function() {
+  atualizarStatusAPI();
+  const k = getChave();
+  if (k) log('Chave Anthropic detectada no navegador', 'ok');
+  else    log('Sem chave Anthropic — modo offline disponível');
+  setMode('offline');
+};
+</script>
+</body>
+</html>
